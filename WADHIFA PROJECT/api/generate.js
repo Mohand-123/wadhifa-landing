@@ -1,6 +1,5 @@
 // Wadhifa — Vercel Serverless Function
 // Route: POST /api/generate
-// Génère des offres d'emploi et des profils CV via Gemini Flash (gratuit)
 
 const GEMINI_MODEL = "gemini-2.0-flash";
 
@@ -21,12 +20,7 @@ Rédige une offre d'emploi complète, claire et engageante, structurée ainsi :
 4. "Profil recherché" : 4-5 puces
 5. "Ce que nous offrons" : 3-4 puces
 
-Règles :
-- Français professionnel mais chaleureux
-- Adapté au marché du travail algérien
-- Pas de promesses irréalistes
-- Format texte clair avec des tirets pour les puces (pas de markdown lourd)
-- Reste concis : l'offre complète doit faire 200-280 mots maximum`,
+Règles : français professionnel, adapté au marché algérien, 200-280 mots max, tirets pour les puces.`,
 
   cv: (data) => `Tu es un coach carrière algérien qui aide les candidats à valoriser leur parcours pour la plateforme d'emploi Wadhifa.
 
@@ -36,21 +30,16 @@ Voici les informations fournies par le candidat :
 - Formation : ${data.formation || "non précisé"}
 - Compétences : ${data.competences || "non précisé"}
 
-Aide ce candidat en produisant :
+Produis :
 1. Un "Titre professionnel" percutant (1 ligne)
-2. Un "Résumé de profil" prêt à copier dans un CV (3-4 phrases, à la première personne, valorisant)
-3. "Compétences clés" : reformule ses compétences en 5-6 puces professionnelles
-4. "Conseils personnalisés" : 3 conseils concrets pour améliorer son CV vu son profil
+2. Un "Résumé de profil" prêt à copier dans un CV (3-4 phrases, 1ère personne)
+3. "Compétences clés" : 5-6 puces professionnelles
+4. "Conseils personnalisés" : 3 conseils concrets
 
-Règles :
-- Français professionnel et bienveillant
-- Adapté au marché algérien
-- Encourage sans mentir
-- Format texte clair avec tirets pour les puces (pas de markdown lourd)
-- Reste concis : 220-300 mots maximum`,
+Règles : français professionnel, adapté au marché algérien, 220-300 mots max, tirets pour les puces.`,
 };
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
@@ -67,14 +56,13 @@ export default async function handler(req, res) {
 
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      return res.status(500).json({ error: "Assistant IA non configuré. Contactez l'équipe Wadhifa." });
+      return res.status(500).json({ error: "Assistant IA non configuré." });
     }
 
     const prompt = PROMPTS[type](data || {});
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
 
-    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
-
-    const geminiResponse = await fetch(geminiUrl, {
+    const geminiRes = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -83,20 +71,19 @@ export default async function handler(req, res) {
       }),
     });
 
-    if (!geminiResponse.ok) {
-      const errText = await geminiResponse.text();
-      console.error("Erreur Gemini:", errText);
-      return res.status(502).json({ error: "L'assistant IA est momentanément indisponible. Réessayez." });
+    if (!geminiRes.ok) {
+      const errText = await geminiRes.text();
+      console.error("Gemini error:", errText);
+      return res.status(502).json({ error: "L'assistant IA est indisponible. Réessayez." });
     }
 
-    const result = await geminiResponse.json();
-    const generatedText = result?.candidates?.[0]?.content?.parts?.[0]?.text
-      || "Désolé, aucune réponse générée. Réessayez.";
+    const result = await geminiRes.json();
+    const text = result?.candidates?.[0]?.content?.parts?.[0]?.text || "Aucune réponse générée.";
 
-    return res.status(200).json({ result: generatedText });
+    return res.status(200).json({ result: text });
 
   } catch (err) {
-    console.error("Erreur serveur:", err);
-    return res.status(500).json({ error: "Une erreur s'est produite. Réessayez dans un instant." });
+    console.error("Erreur:", err);
+    return res.status(500).json({ error: "Une erreur s'est produite. Réessayez." });
   }
-}
+};
